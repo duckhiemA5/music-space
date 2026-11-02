@@ -1,0 +1,195 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#090914">
+  <title>Music Space — Your music universe</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <a class="logo" href="#">
+        <span class="logo-icon">♫</span>
+        <span>music<span class="logo-light">space</span></span>
+      </a>
+
+      <p class="side-label">MENU</p>
+      <nav>
+        <button class="nav-item active" data-view="home">⌂ <span>Khám phá</span></button>
+        <button class="nav-item" data-view="library">▤ <span>Thư viện</span></button>
+        <button class="nav-item" data-view="upload">＋ <span>Thêm nhạc</span></button>
+      </nav>
+
+      <p class="side-label">THỂ LOẠI</p>
+      <nav class="genres">
+        <button class="genre-link" data-genre="V-Pop"><i class="dot pink"></i> V-Pop</button>
+        <button class="genre-link" data-genre="K-Pop"><i class="dot purple"></i> K-Pop</button>
+        <button class="genre-link" data-genre="US-UK"><i class="dot blue"></i> US-UK</button>
+        <button class="genre-link" data-genre="J-Pop"><i class="dot orange"></i> J-Pop</button>
+        <button class="genre-link" data-genre="C-Pop"><i class="dot green"></i> C-Pop</button>
+        <button class="genre-link" data-genre="Lo-fi"><i class="dot yellow"></i> Lo-fi</button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="storage-card">
+          <span class="storage-icon">✦</span>
+          <strong>Your music universe</strong>
+          <p>Lưu giữ những giai điệu yêu thích của bạn.</p>
+        </div>
+        <span class="side-version">MUSIC SPACE · 1.0</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumbs">YOUR UNIVERSE <span>/</span> <b id="page-name">Khám phá</b></div>
+        <div class="top-actions">
+          <label class="search-box">
+            <span>⌕</span>
+            <input id="searchInput" type="search" placeholder="Tìm bài hát, nghệ sĩ...">
+            <kbd>⌘ K</kbd>
+          </label>
+          <button class="avatar" title="Music Space">M</button>
+        </div>
+      </header>
+
+      <section id="homeView" class="view">
+        <section class="hero">
+          <div class="hero-content">
+            <span class="eyebrow">✦ YOUR PERSONAL MUSIC UNIVERSE</span>
+            <h1>Feel the music.<br><span>Explore the space.</span></h1>
+            <p>Một không gian dành riêng cho những giai điệu bạn yêu thích.</p>
+            <button class="primary-btn" id="exploreBtn">Khám phá thư viện <span>→</span></button>
+          </div>
+          <div class="hero-orb">
+            <div class="orb-ring ring-one"></div>
+            <div class="orb-ring ring-two"></div>
+            <div class="orb-core">♫</div>
+            <span class="floating-note note-one">♪</span>
+            <span class="floating-note note-two">♫</span>
+          </div>
+          <div class="hero-glow"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <div><span class="eyebrow">BROWSE YOUR WORLD</span><h2>Khám phá thể loại</h2></div>
+          </div>
+          <div class="genre-grid">
+            <button class="genre-card card-vpop" data-genre="V-Pop"><span>01 / VIETNAM</span><strong>V-Pop</strong><i>♫</i></button>
+            <button class="genre-card card-kpop" data-genre="K-Pop"><span>02 / KOREA</span><strong>K-Pop</strong><i>✦</i></button>
+            <button class="genre-card card-usuk" data-genre="US-UK"><span>03 / GLOBAL</span><strong>US-UK</strong><i>♪</i></button>
+            <button class="genre-card card-jpop" data-genre="J-Pop"><span>04 / JAPAN</span><strong>J-Pop</strong><i>✿</i></button>
+            <button class="genre-card card-cpop" data-genre="C-Pop"><span>05 / CHINA</span><strong>C-Pop</strong><i>✧</i></button>
+            <button class="genre-card card-lofi" data-genre="Lo-fi"><span>06 / CHILL</span><strong>Lo-fi</strong><i>☾</i></button>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <div><span class="eyebrow">YOUR COLLECTION</span><h2>Nhạc mới thêm</h2></div>
+            <button class="text-btn" id="seeAllBtn">Xem tất cả →</button>
+          </div>
+          <div id="homeTracks" class="track-list"></div>
+        </section>
+      </section>
+
+      <section id="libraryView" class="view hidden">
+        <div class="page-intro">
+          <span class="eyebrow">ALL YOUR FAVORITES</span>
+          <h1>Thư viện nhạc</h1>
+          <p>Tất cả giai điệu trong vũ trụ của bạn.</p>
+        </div>
+        <div class="filters">
+          <select id="genreFilter">
+            <option value="all">Tất cả thể loại</option>
+            <option>V-Pop</option><option>K-Pop</option><option>US-UK</option>
+            <option>J-Pop</option><option>C-Pop</option><option>Lo-fi</option>
+          </select>
+          <select id="formatFilter">
+            <option value="all">Tất cả định dạng</option>
+            <option>AAC</option><option>ALAC</option><option>M4A</option>
+            <option>MP3</option><option>FLAC</option><option>WAV</option>
+          </select>
+          <span id="trackCount" class="track-count">0 bài hát</span>
+        </div>
+        <div id="libraryTracks" class="track-list"></div>
+        <div id="emptyLibrary" class="empty-state hidden">
+          <span>♫</span><h3>Chưa có bài hát nào</h3>
+          <p>Hãy thêm những giai điệu đầu tiên vào thư viện.</p>
+          <button class="primary-btn" data-open-upload>Thêm nhạc ngay →</button>
+        </div>
+      </section>
+
+      <section id="uploadView" class="view hidden">
+        <div class="page-intro">
+          <span class="eyebrow">GROW YOUR COLLECTION</span>
+          <h1>Thêm nhạc mới</h1>
+          <p>Đưa những giai điệu yêu thích vào Music Space.</p>
+        </div>
+
+        <div class="upload-grid">
+          <form id="uploadForm" class="panel">
+            <div class="panel-heading"><span class="panel-icon">↑</span><div><h2>Tải tệp nhạc lên</h2><p>Thêm nhạc từ thiết bị của bạn</p></div></div>
+            <label class="drop-zone" for="audioFile">
+              <span class="upload-symbol">⇧</span>
+              <strong>Chọn tệp nhạc</strong>
+              <span>Kéo thả hoặc nhấn để chọn tệp</span>
+              <small>AAC · ALAC · M4A · MP3 · FLAC · WAV</small>
+              <input id="audioFile" type="file" accept="audio/*,.aac,.alac,.m4a,.flac,.wav" required>
+            </label>
+            <label class="field-label">Tên bài hát<input id="uploadTitle" type="text" placeholder="Ví dụ: Một ngày mới" required></label>
+            <label class="field-label">Nghệ sĩ<input id="uploadArtist" type="text" placeholder="Tên nghệ sĩ" required></label>
+            <div class="field-row">
+              <label class="field-label">Thể loại<select id="uploadGenre"><option>V-Pop</option><option>K-Pop</option><option>US-UK</option><option>J-Pop</option><option>C-Pop</option><option>Lo-fi</option><option>Khác</option></select></label>
+              <label class="field-label">Định dạng<select id="uploadFormat"><option>AAC</option><option>ALAC</option><option>M4A</option><option>MP3</option><option>FLAC</option><option>WAV</option></select></label>
+            </div>
+            <label class="field-label">Nguồn / giấy phép (không bắt buộc)<input id="uploadLicense" type="text" placeholder="Ví dụ: Nhạc tự sáng tác / CC BY"></label>
+            <button class="primary-btn full-btn" type="submit">Thêm vào thư viện <span>→</span></button>
+            <p class="form-note">Bản chạy thử lưu tệp trong bộ nhớ trình duyệt. Tải lại trang có thể mất dữ liệu.</p>
+          </form>
+
+          <form id="linkForm" class="panel">
+            <div class="panel-heading"><span class="panel-icon">↗</span><div><h2>Thêm bằng đường dẫn</h2><p>Dùng liên kết tệp âm thanh trực tiếp</p></div></div>
+            <label class="field-label">Đường dẫn âm thanh<input id="audioUrl" type="url" placeholder="https://example.com/song.m4a" required></label>
+            <label class="field-label">Tên bài hát<input id="linkTitle" type="text" placeholder="Tên bài hát" required></label>
+            <label class="field-label">Nghệ sĩ<input id="linkArtist" type="text" placeholder="Tên nghệ sĩ" required></label>
+            <div class="field-row">
+              <label class="field-label">Thể loại<select id="linkGenre"><option>V-Pop</option><option>K-Pop</option><option>US-UK</option><option>J-Pop</option><option>C-Pop</option><option>Lo-fi</option><option>Khác</option></select></label>
+              <label class="field-label">Định dạng<select id="linkFormat"><option>AAC</option><option>ALAC</option><option>M4A</option><option>MP3</option><option>FLAC</option><option>WAV</option></select></label>
+            </div>
+            <label class="field-label">Nguồn / giấy phép<input id="linkLicense" type="text" placeholder="Nguồn nhạc hoặc giấy phép"></label>
+            <button class="secondary-btn full-btn" type="submit">Thêm đường dẫn <span>→</span></button>
+            <p class="form-note">Cần URL trỏ trực tiếp tới tệp âm thanh. Liên kết trang YouTube/Spotify không phải URL tệp nhạc.</p>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="player">
+    <div class="now-playing">
+      <div class="cover-art" id="playerCover">♫</div>
+      <div class="now-text"><strong id="playerTitle">Chưa phát nhạc</strong><span id="playerArtist">Chọn một bài hát để bắt đầu</span></div>
+    </div>
+    <div class="player-center">
+      <div class="player-controls">
+        <button id="prevBtn" title="Bài trước">|◀</button>
+        <button id="playBtn" class="play-button" title="Phát / Tạm dừng">▶</button>
+        <button id="nextBtn" title="Bài tiếp">▶|</button>
+      </div>
+      <div class="progress-row"><span id="currentTime">0:00</span><input id="seekBar" type="range" min="0" max="100" value="0"><span id="duration">0:00</span></div>
+    </div>
+    <div class="player-extra"><span>♫</span><input id="volumeBar" type="range" min="0" max="1" step="0.01" value="0.8"></div>
+  </footer>
+
+  <audio id="audioPlayer"></audio>
+  <div id="toast" class="toast"></div>
+  <script src="script.js"></script>
+</body>
+</html>
