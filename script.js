@@ -1,334 +1,596 @@
 
-const audio = document.getElementById("audioPlayer");
+// ======================================
+// 1. KẾT NỐI SUPABASE
+// ======================================
+
+const SUPABASE_URL = "https://vgwixirwiubqydggvepg.supabase.co";
+const SUPABASE_KEY = "sb_publishable_KggJYi1-KgKxmN9hr-kODg_KTj_KMvC";
+
+const db = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
+
+const BUCKET = "music";
 
 let tracks = [];
 let currentIndex = -1;
-let toastTimer;
 
-const $ = (id) => document.getElementById(id);
+
+// ======================================
+// 2. CÁC PHẦN TỬ HTML
+// ======================================
+
+const audio = document.getElementById("audioPlayer");
+const playBtn = document.getElementById("playBtn");
+const seekBar = document.getElementById("seekBar");
+const volumeBar = document.getElementById("volumeBar");
+
+
+// ======================================
+// 3. THÔNG BÁO
+// ======================================
 
 function showToast(message) {
-  const toast = $("toast");
-  toast.textContent = message;
-  toast.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove("show"), 2500);
+    const toast = document.getElementById("toast");
+
+    toast.textContent = message;
+    toast.style.display = "block";
+
+    setTimeout(() => {
+        toast.style.display = "none";
+    }, 3500);
 }
 
-function formatTime(seconds) {
-  if (!Number.isFinite(seconds)) return "0:00";
-  const min = Math.floor(seconds / 60);
-  const sec = Math.floor(seconds % 60).toString().padStart(2, "0");
-  return `${min}:${sec}`;
+
+// ======================================
+// 4. CHUYỂN TRANG
+// ======================================
+
+function switchView(viewName) {
+    document.querySelectorAll(".view").forEach(view => {
+        view.hidden = true;
+    });
+
+    const selected = document.getElementById(viewName + "View");
+
+    if (selected) selected.hidden = false;
+
+    document.querySelectorAll(".nav-item").forEach(button => {
+        button.classList.toggle(
+            "active",
+            button.dataset.view === viewName
+        );
+    });
+
+    const names = {
+        home: "Khám phá",
+        library: "Thư viện",
+        upload: "Thêm nhạc"
+    };
+
+    document.getElementById("page-name").textContent =
+        names[viewName] || "Music Space";
 }
 
-function getFileExtension(name) {
-  return (name.split(".").pop() || "").toUpperCase();
+document.querySelectorAll("[data-view]").forEach(button => {
+    button.addEventListener("click", () => {
+        switchView(button.dataset.view);
+    });
+});
+
+
+// ======================================
+// 5. TẢI DANH SÁCH NHẠC
+// ======================================
+
+async function loadTracks() {
+    try {
+        const { data, error } = await db
+            .from("music_tracks")
+            .select("*")
+            .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        tracks = data || [];
+
+        renderTracks();
+        updateStatistics();
+
+    } catch (error) {
+        console.error("Lỗi tải danh sách:", error);
+        showToast("Không tải được thư viện: " + error.message);
+    }
 }
 
-function getFilteredTracks() {
-  const keyword = $("searchInput").value.trim().toLowerCase();
-  const genre = $("genreFilter").value;
-  const format = $("formatFilter").value;
 
-  return tracks.filter(track => {
-    const matchesSearch =
-      `${track.title} ${track.artist} ${track.genre}`.toLowerCase().includes(keyword);
-    const matchesGenre = genre === "all" || track.genre === genre;
-    const matchesFormat = format === "all" || track.format === format;
-    return matchesSearch && matchesGenre && matchesFormat;
-  });
+// ======================================
+// 6. HIỂN THỊ NHẠC
+// ======================================
+
+function createTrackElement(track, index) {
+    const item = document.createElement("div");
+    item.className = "track-item";
+
+    const info = document.createElement("div");
+    info.className = "track-info";
+
+    const cover = document.createElement("div");
+    cover.className = "track-cover";
+    cover.textContent = "♫";
+
+    const text = document.createElement("div");
+
+    const title = document.createElement("h4");
+    title.textContent = track.title;
+
+    const artist = document.createElement("p");
+    artist.textContent = track.artist + " · " + track.genre;
+
+    text.append(title, artist);
+    info.append(cover, text);
+
+    const actions = document.createElement("div");
+
+    const play = document.createElement("button");
+    play.textContent = "▶";
+    play.title = "Phát nhạc";
+    play.addEventListener("click", () => playTrack(index));
+
+    const download = document.createElement("button");
+    download.textContent = "↓";
+    download.title = "Tải xuống";
+    download.addEventListener("click", () => {
+        const link = document.createElement("a");
+        link.href = track.audio_url;
+        link.download = track.file_name || track.title;
+        link.target = "_blank";
+        link.click();
+    });
+
+    actions.append(play, download);
+    item.append(info, actions);
+
+    return item;
 }
 
-function renderTrack(track, index) {
-  const row = document.createElement("div");
-  row.className = "track-row";
 
-  const cover = document.createElement("div");
-  cover.className = "track-cover";
-  cover.textContent = "♫";
+function renderTracks() {
+    const home = document.getElementById("homeTracks");
+    const library = document.getElementById("libraryTracks");
 
-  const info = document.createElement("div");
-  info.className = "track-info";
+    home.innerHTML = "";
+    library.innerHTML = "";
 
-  const title = document.createElement("strong");
-  title.textContent = track.title;
+    const keyword =
+        document.getElementById("searchInput").value.toLowerCase();
 
-  const artist = document.createElement("span");
-  artist.textContent = track.artist;
+    const genre =
+        document.getElementById("genreFilter")?.value || "all";
 
-  info.append(title, artist);
+    const format =
+        document.getElementById("formatFilter")?.value || "all";
 
-  const genre = document.createElement("span");
-  genre.className = "track-meta";
-  genre.textContent = track.genre;
+    const filtered = tracks.filter(track => {
+        const matchesSearch =
+            (track.title || "").toLowerCase().includes(keyword) ||
+            (track.artist || "").toLowerCase().includes(keyword);
 
-  const format = document.createElement("span");
-  format.className = "track-format";
-  format.textContent = track.format;
+        const matchesGenre =
+            genre === "all" || track.genre === genre;
 
-  const actions = document.createElement("div");
-  actions.className = "track-actions";
+        const matchesFormat =
+            format === "all" || track.format === format;
 
-  const play = document.createElement("button");
-  play.className = "icon-btn";
-  play.textContent = "▶";
-  play.title = "Phát nhạc";
-  play.addEventListener("click", () => playTrack(index));
+        return matchesSearch && matchesGenre && matchesFormat;
+    });
 
-  const download = document.createElement("button");
-  download.className = "icon-btn";
-  download.textContent = "↓";
-  download.title = "Tải nhạc";
-  download.addEventListener("click", () => downloadTrack(track));
+    filtered.forEach(track => {
+        const index = tracks.indexOf(track);
 
-  actions.append(play, download);
-  row.append(cover, info, genre, format, actions);
-  return row;
+        library.appendChild(createTrackElement(track, index));
+    });
+
+    tracks.slice(0, 5).forEach(track => {
+        const index = tracks.indexOf(track);
+        home.appendChild(createTrackElement(track, index));
+    });
+
+    document.getElementById("trackCount").textContent =
+        filtered.length + " bài hát";
+
+    document.getElementById("emptyLibrary").hidden =
+        filtered.length !== 0;
 }
 
-function fillTrackList(container, list) {
-  container.replaceChildren();
-  list.forEach(track => {
-    const originalIndex = tracks.indexOf(track);
-    container.appendChild(renderTrack(track, originalIndex));
-  });
+
+// ======================================
+// 7. THỐNG KÊ
+// ======================================
+
+
+function updateStatistics() {
+    const countElement = document.getElementById("homeTrackCount");
+
+    if (countElement) {
+        countElement.textContent = tracks.length;
+    }
 }
 
-function renderAll() {
-  fillTrackList($("homeTracks"), tracks.slice(0, 5));
 
-  const filtered = getFilteredTracks();
-  fillTrackList($("libraryTracks"), filtered);
+// ======================================
+// 8. PHÁT NHẠC
+// ======================================
 
-  $("trackCount").textContent = `${filtered.length} bài hát`;
-  $("emptyLibrary").classList.toggle("hidden", filtered.length !== 0);
-}
-
-function openView(view) {
-  const views = {
-    home: $("homeView"),
-    library: $("libraryView"),
-    upload: $("uploadView")
-  };
-
-  Object.entries(views).forEach(([key, element]) => {
-    element.classList.toggle("hidden", key !== view);
-  });
-
-  document.querySelectorAll(".nav-item").forEach(button => {
-    button.classList.toggle("active", button.dataset.view === view);
-  });
-
-  const names = { home: "Khám phá", library: "Thư viện", upload: "Thêm nhạc" };
-  $("page-name").textContent = names[view] || "Music Space";
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
 
 function playTrack(index) {
-  if (index < 0 || index >= tracks.length) return;
+    if (!tracks[index]) return;
 
-  currentIndex = index;
-  const track = tracks[currentIndex];
+    currentIndex = index;
+    const track = tracks[index];
 
-  audio.src = track.url;
-  audio.play().then(() => {
-    $("playBtn").textContent = "Ⅱ";
-  }).catch(() => {
-    showToast("Không thể phát tệp này trên trình duyệt.");
-  });
+    const isZingLink =
+        track.audio_url.includes("zingmp3.vn");
 
-  $("playerTitle").textContent = track.title;
-  $("playerArtist").textContent = `${track.artist} · ${track.format}`;
-}
+    if (isZingLink) {
+        window.open(track.audio_url, "_blank");
+        showToast("Đang mở bài hát trên Zing MP3");
 
-function togglePlay() {
-  if (currentIndex === -1) {
-    if (tracks.length) playTrack(0);
-    else showToast("Thư viện chưa có bài hát.");
-    return;
-  }
+        document.getElementById("playerTitle").textContent =
+            track.title;
 
-  if (audio.paused) {
-    audio.play().then(() => $("playBtn").textContent = "Ⅱ")
-      .catch(() => showToast("Không thể phát bài hát này."));
-  } else {
-    audio.pause();
-    $("playBtn").textContent = "▶";
-  }
-}
+        document.getElementById("playerArtist").textContent =
+            track.artist + " · Zing MP3";
 
-function nextTrack() {
-  if (!tracks.length) return;
-  playTrack((currentIndex + 1) % tracks.length);
-}
-
-function previousTrack() {
-  if (!tracks.length) return;
-  if (audio.currentTime > 3) {
-    audio.currentTime = 0;
-  } else {
-    playTrack((currentIndex - 1 + tracks.length) % tracks.length);
-  }
-}
-
-function downloadTrack(track) {
-  const link = document.createElement("a");
-  link.href = track.url;
-  link.download = track.fileName || `${track.title}.${track.format.toLowerCase()}`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
-
-function addTrack(track) {
-  tracks.unshift(track);
-  renderAll();
-  showToast("Đã thêm nhạc vào thư viện!");
-  openView("library");
-}
-
-// Điều hướng
-document.querySelectorAll(".nav-item").forEach(button => {
-  button.addEventListener("click", () => openView(button.dataset.view));
-});
-
-document.querySelectorAll("[data-open-upload]").forEach(button => {
-  button.addEventListener("click", () => openView("upload"));
-});
-
-$("exploreBtn").addEventListener("click", () => openView("library"));
-$("seeAllBtn").addEventListener("click", () => openView("library"));
-
-document.querySelectorAll("[data-genre]").forEach(button => {
-  button.addEventListener("click", () => {
-    $("genreFilter").value = button.dataset.genre;
-    $("searchInput").value = "";
-    openView("library");
-    renderAll();
-  });
-});
-
-// Tìm kiếm và bộ lọc
-$("searchInput").addEventListener("input", () => {
-  if ($("libraryView").classList.contains("hidden")) {
-    openView("library");
-  }
-  renderAll();
-});
-
-$("genreFilter").addEventListener("change", renderAll);
-$("formatFilter").addEventListener("change", renderAll);
-
-// Chọn file và tự điền tên
-$("audioFile").addEventListener("change", event => {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const name = file.name.replace(/\.[^/.]+$/, "");
-  $("uploadTitle").value = name;
-  $("uploadFormat").value = getFileExtension(file.name) === "M4A"
-    ? "M4A"
-    : getFileExtension(file.name);
-
-  const dropZone = document.querySelector(".drop-zone strong");
-  dropZone.textContent = file.name;
-});
-
-// Thêm nhạc từ máy tính
-$("uploadForm").addEventListener("submit", event => {
-  event.preventDefault();
-
-  const file = $("audioFile").files[0];
-  if (!file) {
-    showToast("Bạn chưa chọn tệp nhạc.");
-    return;
-  }
-
-  const allowed = ["AAC", "ALAC", "M4A", "MP3", "FLAC", "WAV"];
-  const extension = getFileExtension(file.name);
-
-  if (!allowed.includes(extension)) {
-    showToast("Định dạng tệp chưa được hỗ trợ.");
-    return;
-  }
-
-  const url = URL.createObjectURL(file);
-
-  addTrack({
-    title: $("uploadTitle").value.trim(),
-    artist: $("uploadArtist").value.trim(),
-    genre: $("uploadGenre").value,
-    format: $("uploadFormat").value,
-    license: $("uploadLicense").value.trim(),
-    url,
-    fileName: file.name,
-    local: true
-  });
-
-  $("uploadForm").reset();
-  document.querySelector(".drop-zone strong").textContent = "Chọn tệp nhạc";
-});
-
-// Thêm nhạc bằng URL trực tiếp
-$("linkForm").addEventListener("submit", event => {
-  event.preventDefault();
-
-  const url = $("audioUrl").value.trim();
-
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      throw new Error("Invalid protocol");
+        return;
     }
-  } catch {
-    showToast("Đường dẫn không hợp lệ.");
-    return;
-  }
 
-  addTrack({
-    title: $("linkTitle").value.trim(),
-    artist: $("linkArtist").value.trim(),
-    genre: $("linkGenre").value,
-    format: $("linkFormat").value,
-    license: $("linkLicense").value.trim(),
-    url,
-    fileName: `${$("linkTitle").value.trim()}.${$("linkFormat").value.toLowerCase()}`,
-    local: false
-  });
+    audio.src = track.audio_url;
 
-  $("linkForm").reset();
+    document.getElementById("playerTitle").textContent =
+        track.title;
+
+    document.getElementById("playerArtist").textContent =
+        track.artist;
+
+    audio.play()
+        .then(() => {
+            playBtn.textContent = "Ⅱ";
+        })
+        .catch(() => {
+            showToast("Không phát được file âm thanh này.");
+        });
+
+    renderRecent(track);
+}
+
+
+playBtn.addEventListener("click", () => {
+    if (!audio.src) {
+        if (tracks.length > 0) playTrack(0);
+        return;
+    }
+
+    if (audio.paused) {
+        audio.play();
+        playBtn.textContent = "Ⅱ";
+    } else {
+        audio.pause();
+        playBtn.textContent = "▶";
+    }
 });
 
-// Điều khiển trình phát
-$("playBtn").addEventListener("click", togglePlay);
-$("nextBtn").addEventListener("click", nextTrack);
-$("prevBtn").addEventListener("click", previousTrack);
+document.getElementById("prevBtn").addEventListener("click", () => {
+    if (tracks.length === 0) return;
 
-$("volumeBar").addEventListener("input", event => {
-  audio.volume = Number(event.target.value);
+    currentIndex =
+        (currentIndex - 1 + tracks.length) % tracks.length;
+
+    playTrack(currentIndex);
 });
-audio.volume = 0.8;
+
+document.getElementById("nextBtn").addEventListener("click", () => {
+    if (tracks.length === 0) return;
+
+    currentIndex = (currentIndex + 1) % tracks.length;
+
+    playTrack(currentIndex);
+});
+
+audio.addEventListener("ended", () => {
+    if (tracks.length === 0) return;
+
+    currentIndex = (currentIndex + 1) % tracks.length;
+    playTrack(currentIndex);
+});
 
 audio.addEventListener("timeupdate", () => {
-  $("currentTime").textContent = formatTime(audio.currentTime);
-  $("duration").textContent = formatTime(audio.duration);
+    if (!audio.duration) return;
 
-  if (Number.isFinite(audio.duration) && audio.duration > 0) {
-    $("seekBar").value = (audio.currentTime / audio.duration) * 100;
-  }
+    seekBar.value =
+        (audio.currentTime / audio.duration) * 100;
+
+    document.getElementById("currentTime").textContent =
+        formatTime(audio.currentTime);
+
+    document.getElementById("duration").textContent =
+        formatTime(audio.duration);
 });
 
-$("seekBar").addEventListener("input", event => {
-  if (Number.isFinite(audio.duration)) {
-    audio.currentTime = (Number(event.target.value) / 100) * audio.duration;
-  }
+seekBar.addEventListener("input", () => {
+    if (audio.duration) {
+        audio.currentTime =
+            (seekBar.value / 100) * audio.duration;
+    }
 });
 
-audio.addEventListener("ended", nextTrack);
-audio.addEventListener("play", () => $("playBtn").textContent = "Ⅱ");
-audio.addEventListener("pause", () => $("playBtn").textContent = "▶");
+volumeBar.addEventListener("input", () => {
+    audio.volume = volumeBar.value;
+});
 
-// Khởi tạo
-renderAll();
-openView("home");
+audio.volume = 0.8;
+
+function formatTime(seconds) {
+    if (!Number.isFinite(seconds)) return "0:00";
+
+    const minutes = Math.floor(seconds / 60);
+    const remaining = Math.floor(seconds % 60);
+
+    return minutes + ":" + String(remaining).padStart(2, "0");
+}
+
+
+// ======================================
+// 9. NHẠC NGHE GẦN ĐÂY
+// ======================================
+
+function renderRecent(track) {
+    const container = document.getElementById("recentTracks");
+
+    const item = document.createElement("div");
+    item.className = "recent-item";
+
+    const cover = document.createElement("div");
+    cover.className = "recent-cover";
+    cover.textContent = "♫";
+
+    const text = document.createElement("span");
+    text.textContent = track.title + " - " + track.artist;
+
+    item.append(cover, text);
+
+    if (container.querySelector(".muted")) {
+        container.innerHTML = "";
+    }
+
+    container.prepend(item);
+
+    while (container.children.length > 5) {
+        container.lastElementChild.remove();
+    }
+}
+
+
+// ======================================
+// 10. TẢI NHẠC TỪ MÁY TÍNH
+// ======================================
+
+
+// ======================================
+// 10. TẢI NHẠC TỪ MÁY TÍNH
+// ======================================
+
+const uploadForm = document.getElementById("uploadForm");
+
+uploadForm.addEventListener("submit", async function(event) {
+    event.preventDefault();
+
+    const file = document.getElementById("audioFile").files[0];
+
+    if (!file) {
+        showToast("Bạn chưa chọn file nhạc!");
+        return;
+    }
+
+    // Giới hạn file 50 MB
+    const MAX_SIZE = 50 * 1024 * 1024;
+
+    if (file.size > MAX_SIZE) {
+        showToast("File quá lớn! Hãy chọn file dưới 50 MB.");
+        return;
+    }
+
+    const title = document.getElementById("uploadTitle").value.trim();
+    const artist = document.getElementById("uploadArtist").value.trim();
+    const genre = document.getElementById("uploadGenre").value;
+    const format = document.getElementById("uploadFormat").value;
+    const license = document.getElementById("uploadLicense").value.trim();
+
+    const submitButton = this.querySelector('button[type="submit"]');
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Đang tải file lên...";
+
+    let filePath = null;
+    let uploadSucceeded = false;
+
+    try {
+        // BƯỚC 1: TẠO TÊN FILE
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        filePath = Date.now() + "-" + safeName;
+
+        console.log("Bắt đầu tải file:", file.name);
+
+        // BƯỚC 2: TẢI FILE LÊN SUPABASE
+        const { data: uploadData, error: uploadError } =
+            await db.storage
+                .from(BUCKET)
+                .upload(filePath, file, {
+                    cacheControl: "3600",
+                    upsert: false,
+                    contentType: file.type || "application/octet-stream"
+                });
+
+        if (uploadError) {
+            throw new Error("Lỗi tải file: " + uploadError.message);
+        }
+
+        uploadSucceeded = true;
+        console.log("Đã tải file lên:", uploadData);
+
+        // BƯỚC 3: LẤY URL FILE
+        submitButton.textContent = "Đang lưu thông tin...";
+
+        const { data: urlData } = db.storage
+            .from(BUCKET)
+            .getPublicUrl(filePath);
+
+        const publicUrl = urlData.publicUrl;
+
+        if (!publicUrl) {
+            throw new Error("Không lấy được đường dẫn file.");
+        }
+
+        // BƯỚC 4: LƯU THÔNG TIN VÀO DATABASE
+        const { error: insertError } = await db
+            .from("music_tracks")
+            .insert([{
+                title: title,
+                artist: artist,
+                genre: genre,
+                format: format,
+                audio_url: publicUrl,
+                storage_path: filePath,
+                file_name: file.name,
+                source_type: "upload",
+                license: license
+            }]);
+
+        if (insertError) {
+            throw new Error("Lỗi lưu thông tin: " + insertError.message);
+        }
+
+        console.log("Đã lưu bài hát vào database.");
+
+        showToast("Tải nhạc thành công!");
+        this.reset();
+
+    } catch (error) {
+        console.error("LỖI UPLOAD:", error);
+
+        showToast(error.message || "Có lỗi khi tải nhạc lên.");
+
+        // Xóa file nếu đã tải lên nhưng lưu database thất bại
+        if (uploadSucceeded && filePath) {
+            const { error: removeError } = await db.storage
+                .from(BUCKET)
+                .remove([filePath]);
+
+            if (removeError) {
+                console.error("Không xóa được file tạm:", removeError);
+            }
+        }
+
+    } finally {
+        // MỞ KHÓA NÚT NGAY SAU KHI XỬ LÝ UPLOAD
+        submitButton.disabled = false;
+        submitButton.textContent = "Tải nhạc lên ↑";
+    }
+
+    // BƯỚC 5: TẢI LẠI THƯ VIỆN SAU KHI MỞ KHÓA NÚT
+    if (uploadSucceeded) {
+        loadTracks();
+    }
+});
+
+
+
+// ======================================
+// 11. THÊM NHẠC BẰNG LINK
+// ======================================
+
+document.getElementById("linkForm")
+    .addEventListener("submit", async function(event) {
+
+    event.preventDefault();
+
+    const submitButton = this.querySelector('button[type="submit"]');
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Đang thêm...";
+
+    try {
+        const track = {
+            title: document.getElementById("linkTitle").value.trim(),
+            artist: document.getElementById("linkArtist").value.trim(),
+            genre: document.getElementById("linkGenre").value,
+            format: document.getElementById("linkFormat").value,
+            audio_url: document.getElementById("audioUrl").value.trim(),
+            source_type: "external",
+            license: document.getElementById("linkLicense").value.trim()
+        };
+
+        const { error } = await db
+            .from("music_tracks")
+            .insert([track]);
+
+        if (error) throw error;
+
+        showToast("Đã thêm bài hát thành công!");
+
+        this.reset();
+
+        await loadTracks();
+
+    } catch (error) {
+        console.error("Lỗi thêm link:", error);
+        showToast("Không thêm được nhạc: " + error.message);
+
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = "Thêm vào thư viện →";
+    }
+});
+
+
+// ======================================
+// 12. TÌM KIẾM VÀ LỌC
+// ======================================
+
+document.getElementById("searchInput")
+    .addEventListener("input", renderTracks);
+
+document.getElementById("genreFilter")
+    .addEventListener("change", renderTracks);
+
+document.getElementById("formatFilter")
+    .addEventListener("change", renderTracks);
+
+
+// Nhấn thể loại ở sidebar hoặc trang chủ
+document.querySelectorAll("[data-genre]").forEach(button => {
+    button.addEventListener("click", () => {
+        switchView("library");
+
+        document.getElementById("genreFilter").value =
+            button.dataset.genre;
+
+        renderTracks();
+    });
+});
+
+
+// Nút xem thư viện từ banner
+document.getElementById("featuredPlay")
+    ?.addEventListener("click", () => {
+        if (tracks.length > 0) playTrack(0);
+        else showToast("Thư viện chưa có bài hát.");
+    });
+
+
+// ======================================
+// 13. KHỞI ĐỘNG
+// ======================================
+
+loadTracks();
