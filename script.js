@@ -916,7 +916,20 @@ document.addEventListener("click", async event => {
             }
         );
 
-        if (error) throw error;
+        if (error) {
+            let detail = error.message;
+
+            if (error.context instanceof Response) {
+                try {
+                    const result = await error.context.clone().json();
+                    detail = result.error || JSON.stringify(result);
+                } catch {
+                    detail = await error.context.clone().text();
+                }
+            }
+
+            throw new Error(detail);
+        }
 
         if (!data || !data.success) {
             throw new Error(data?.error || "Không thể xóa bài hát.");
