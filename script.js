@@ -869,6 +869,11 @@ async function init() {
 // XÓA BÀI HÁT
 // ==========================================
 
+
+// ==========================================
+// XÓA BÀI HÁT - CHỈ CHỦ WEBSITE
+// ==========================================
+
 document.addEventListener("click", async event => {
     const button = event.target.closest("[data-delete]");
 
@@ -878,6 +883,13 @@ document.addEventListener("click", async event => {
     const track = tracks[index];
 
     if (!track) return;
+
+    // Yêu cầu mật khẩu quản trị
+    const password = prompt("Nhập mật khẩu quản trị để xóa bài hát:");
+
+    if (password === null || password.trim() === "") {
+        return;
+    }
 
     const confirmed = confirm(
         `Bạn có chắc chắn muốn xóa "${track.title}" không?`
@@ -891,53 +903,52 @@ document.addEventListener("click", async event => {
     const oldCurrentIndex = currentIndex;
 
     try {
-        // Xóa bản ghi trong database trước
-        const { error: dbError } = await supabaseClient
-            .from("music_tracks")
-            .delete()
-            .eq("id", track.id);
+        // Gọi Supabase Edge Function
+        const { data, error } = await supabaseClient.functions.invoke(
+            "delete-track",
+            {
+                body: {
+                    trackId: track.id
+                },
+                headers: {
+                    "x-admin-password": password
+                }
+            }
+        );
 
-        if (dbError) throw dbError;
+        if (error) throw error;
 
-        // Dừng nhạc nếu bài bị xóa đang được phát
+        if (!data || !data.success) {
+            throw new Error(data?.error || "Không thể xóa bài hát.");
+        }
+
+        // Nếu đang phát bài bị xóa thì dừng
         if (oldCurrentIndex === index) {
             stopCurrentPlayback();
             currentIndex = -1;
 
             nowTitle.textContent = "Chưa phát nhạc";
             nowArtist.textContent = "Chọn một bài hát để bắt đầu";
-        }
-
-        // Xóa file trong Storage nếu là nhạc đã tải lên
-        if (track.storage_path) {
-            const { error: storageError } = await supabaseClient
-                .storage
-                .from(BUCKET)
-                .remove([track.storage_path]);
-
-            if (storageError) {
-                console.error("Lỗi xóa file Storage:", storageError);
-                alert("Đã xóa bài hát khỏi thư viện nhưng file trong Storage chưa xóa được.");
-            }
-        }
-
-        // Điều chỉnh vị trí bài đang phát
-        if (oldCurrentIndex > index) {
+        } else if (oldCurrentIndex > index) {
             currentIndex = oldCurrentIndex - 1;
         }
 
-        formMessage.textContent = "Đã xóa bài hát thành công!";
+        alert("Đã xóa bài hát thành công!");
 
         await loadTracks();
 
     } catch (error) {
         console.error("Delete error:", error);
 
-        alert("Không thể xóa bài hát: " + error.message);
+        alert(
+            "Không thể xóa bài hát: " +
+            (error.message || "Lỗi không xác định")
+        );
 
         button.disabled = false;
         button.textContent = "🗑";
     }
 });
+
 
 init();
