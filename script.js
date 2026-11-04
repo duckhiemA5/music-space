@@ -314,7 +314,8 @@ function identifySource(rawUrl) {
 // ==========================================
 // CREATE EMBED PLAYER
 // ==========================================
-function createEmbed(source) {
+
+async function createEmbed(source) {
   embedPlayer.innerHTML = "";
   embedPlayer.hidden = false;
 
@@ -322,6 +323,7 @@ function createEmbed(source) {
   soundCloudWidget = null;
   spotifyController = null;
 
+  // YOUTUBE
   if (source.type === "youtube") {
     pendingYouTubeId = source.id;
 
@@ -332,44 +334,90 @@ function createEmbed(source) {
     return true;
   }
 
+  // SOUNDCLOUD
   if (source.type === "soundcloud") {
-    const iframe = document.createElement("iframe");
+    try {
+      // Chuyển link rút gọn thành mã nhúng chính thức
+      const oembedUrl =
+        "https://soundcloud.com/oembed?format=json&url=" +
+        encodeURIComponent(source.url);
 
-    iframe.id = "soundcloudPlayer";
-    iframe.allow = "autoplay";
-    iframe.src =
-      "https://w.soundcloud.com/player/?url=" +
-      encodeURIComponent(source.url) +
-      "&auto_play=true&visual=false";
+      const response = await fetch(oembedUrl);
 
-    embedPlayer.appendChild(iframe);
+      if (!response.ok) {
+        throw new Error("SoundCloud không nhận diện được link.");
+      }
 
-    iframe.onload = () => {
-      soundCloudWidget = SC.Widget(iframe);
+      const data = await response.json();
 
-      soundCloudWidget.bind(SC.Widget.Events.READY, () => {
-        soundCloudWidget.play();
-        playBtn.textContent = "Ⅱ";
-      });
+      // Lấy địa chỉ iframe do SoundCloud trả về
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(data.html, "text/html");
+      const originalFrame = doc.querySelector("iframe");
 
-      soundCloudWidget.bind(SC.Widget.Events.PLAY, () => {
-        playBtn.textContent = "Ⅱ";
-      });
+      if (!originalFrame || !originalFrame.src) {
+        throw new Error("Không lấy được trình phát SoundCloud.");
+      }
 
-      soundCloudWidget.bind(SC.Widget.Events.PAUSE, () => {
-        playBtn.textContent = "▶";
-      });
+      const iframe = document.createElement("iframe");
 
-      soundCloudWidget.bind(SC.Widget.Events.FINISH, () => {
-        if (tracks.length) {
-          playTrack((currentIndex + 1) % tracks.length);
-        }
-      });
-    };
+      iframe.id = "soundcloudPlayer";
+      iframe.width = "100%";
+      iframe.height = "166";
+      iframe.scrolling = "no";
+      iframe.frameBorder = "0";
+      iframe.allow = "autoplay";
 
-    return true;
+      const playerUrl = new URL(originalFrame.src);
+      playerUrl.searchParams.set("auto_play", "true");
+      playerUrl.searchParams.set("visual", "false");
+
+      iframe.src = playerUrl.href;
+
+      embedPlayer.appendChild(iframe);
+
+      // Nạp API điều khiển SoundCloud
+      if (!window.SC) {
+        await loadExternalScript(
+          "https://w.soundcloud.com/player/api.js"
+        );
+      }
+
+      iframe.onload = () => {
+        if (!window.SC) return;
+
+        soundCloudWidget = SC.Widget(iframe);
+
+        soundCloudWidget.bind(SC.Widget.Events.READY, () => {
+          soundCloudWidget.play();
+          playBtn.textContent = "Ⅱ";
+        });
+
+        soundCloudWidget.bind(SC.Widget.Events.PLAY, () => {
+          playBtn.textContent = "Ⅱ";
+        });
+
+        soundCloudWidget.bind(SC.Widget.Events.PAUSE, () => {
+          playBtn.textContent = "▶";
+        });
+
+        soundCloudWidget.bind(SC.Widget.Events.FINISH, () => {
+          if (tracks.length) {
+            playTrack((currentIndex + 1) % tracks.length);
+          }
+        });
+      };
+
+      return true;
+
+    } catch (error) {
+      console.error("SoundCloud error:", error);
+      alert("Không thể tải nhạc SoundCloud: " + error.message);
+      return false;
+    }
   }
 
+  // SPOTIFY
   if (source.type === "spotify") {
     const url =
       `https://open.spotify.com/${source.kind}/${source.id}`;
@@ -385,6 +433,7 @@ function createEmbed(source) {
 
   return false;
 }
+
 // ==========================================
 // PLAY MUSIC
 // ==========================================
@@ -457,7 +506,7 @@ async function playTrack(index) {
   ) {
     currentMode = "embed";
 
-    if (!createEmbed(source)) {
+    if (!(await createEmbed(source))) {
       alert("Không thể tạo trình phát cho đường link này.");
       return;
     }
