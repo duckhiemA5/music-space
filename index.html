@@ -110,7 +110,12 @@
             <p>Tải file nhạc lên kho lưu trữ của bạn.</p>
 
             <label for="audioFile">Chọn file nhạc</label>
-            <input id="audioFile" type="file" accept="audio/*" required>
+            <input
+              type="file"
+              id="audioFile"
+              accept=".mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.alac,.opus,.mp4,audio/*"
+              required
+            >
 
             <label for="fileTitle">Tên bài hát</label>
             <input id="fileTitle" type="text" placeholder="Tên bài hát">
@@ -169,7 +174,7 @@
         <span id="nowArtist">Chọn một bài hát để bắt đầu</span>
       </div>
     </div>
-
+    
     <div class="player-center">
       <div class="player-controls">
         <button id="prevBtn" title="Bài trước">⏮</button>

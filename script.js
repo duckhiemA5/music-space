@@ -143,6 +143,21 @@ function createSpotifyPlayer(url, api = window.SpotifyIframeApi) {
 
       controller.addListener("playback_update", event => {
         playBtn.textContent = event.data.isPaused ? "▶" : "Ⅱ";
+
+        const position = event.data.position || 0;
+        const duration = event.data.duration || 0;
+
+        window.spotifyDuration = duration;
+
+        if (duration > 0) {
+          progressBar.value = (position / duration) * 100;
+
+          currentTimeText.textContent =
+            formatTime(position / 1000);
+
+          durationText.textContent =
+            formatTime(duration / 1000);
+        }
       });
     }
   );
@@ -374,15 +389,7 @@ async function createEmbed(source) {
 
       iframe.src = playerUrl.href;
 
-      embedPlayer.appendChild(iframe);
-
-      // Nạp API điều khiển SoundCloud
-      if (!window.SC) {
-        await loadExternalScript(
-          "https://w.soundcloud.com/player/api.js"
-        );
-      }
-
+      // Gán sự kiện trước khi thêm iframe vào trang
       iframe.onload = () => {
         if (!window.SC) return;
 
@@ -408,6 +415,9 @@ async function createEmbed(source) {
         });
       };
 
+
+
+embedPlayer.appendChild(iframe);
       return true;
 
     } catch (error) {
@@ -599,34 +609,118 @@ audio.addEventListener("ended", () => {
   }
 });
 
-audio.addEventListener("timeupdate", () => {
-  if (!Number.isFinite(audio.duration)) return;
 
-  progressBar.value =
-    (audio.currentTime / audio.duration) * 100;
+// CẬP NHẬT THANH THỜI GIAN
+function updateProgress() {
+  if (currentMode === "audio") {
+    if (!Number.isFinite(audio.duration)) return;
 
-  currentTimeText.textContent = formatTime(audio.currentTime);
-  durationText.textContent = formatTime(audio.duration);
-});
+    progressBar.value =
+      (audio.currentTime / audio.duration) * 100;
 
+    currentTimeText.textContent = formatTime(audio.currentTime);
+    durationText.textContent = formatTime(audio.duration);
+  }
+
+  // YOUTUBE
+  else if (currentMode === "embed" && youtubePlayer) {
+    try {
+      const current = youtubePlayer.getCurrentTime();
+      const total = youtubePlayer.getDuration();
+
+      if (total > 0) {
+        progressBar.value = (current / total) * 100;
+        currentTimeText.textContent = formatTime(current);
+        durationText.textContent = formatTime(total);
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+  // SOUNDCLOUD
+  else if (currentMode === "embed" && soundCloudWidget) {
+    soundCloudWidget.getPosition(position => {
+      soundCloudWidget.getDuration(duration => {
+        if (duration > 0) {
+          progressBar.value = (position / duration) * 100;
+          currentTimeText.textContent =
+            formatTime(position / 1000);
+          durationText.textContent =
+            formatTime(duration / 1000);
+        }
+      });
+    });
+  }
+}
+
+// Cập nhật thời gian liên tục
+setInterval(updateProgress, 500);
+
+// FILE AUDIO
 audio.addEventListener("loadedmetadata", () => {
   durationText.textContent = formatTime(audio.duration);
 });
 
-progressBar.addEventListener("input", () => {
-  if (
-    currentMode === "audio" &&
-    Number.isFinite(audio.duration)
-  ) {
-    audio.currentTime =
-      (Number(progressBar.value) / 100) * audio.duration;
+// KÉO THANH ĐỂ TUA
+progressBar.addEventListener("change", () => {
+  const percent = Number(progressBar.value) / 100;
+
+  // File audio
+  if (currentMode === "audio" && Number.isFinite(audio.duration)) {
+    audio.currentTime = percent * audio.duration;
+  }
+
+  // YouTube
+  else if (currentMode === "embed" && youtubePlayer) {
+    const total = youtubePlayer.getDuration();
+
+    if (total > 0) {
+      youtubePlayer.seekTo(percent * total, true);
+    }
+  }
+
+  // SoundCloud
+  else if (currentMode === "embed" && soundCloudWidget) {
+    soundCloudWidget.getDuration(duration => {
+      soundCloudWidget.seekTo(percent * duration);
+    });
+  }
+
+  // Spotify
+  else if (currentMode === "embed" && spotifyController) {
+    // Spotify yêu cầu thời gian tính bằng mili giây
+    const total = window.spotifyDuration || 0;
+
+    if (total > 0) {
+      spotifyController.seek(percent * total);
+    }
   }
 });
 
-volumeBar.addEventListener("input", () => {
-  audio.volume = Number(volumeBar.value);
-});
 
+// ĐIỀU CHỈNH ÂM LƯỢNG
+function updateVolume() {
+  const volume = Number(volumeBar.value);
+
+  // File nhạc trực tiếp
+  audio.volume = volume;
+
+  // YouTube
+  if (youtubePlayer) {
+    youtubePlayer.setVolume(volume * 100);
+  }
+
+  // SoundCloud
+  if (soundCloudWidget) {
+    soundCloudWidget.setVolume(volume * 100);
+  }
+}
+
+// Khi kéo thanh âm lượng
+volumeBar.addEventListener("input", updateVolume);
+
+// Âm lượng mặc định
 audio.volume = 0.8;
 
 // ==========================================
@@ -762,8 +856,16 @@ document.getElementById("uploadForm").addEventListener("submit", async event => 
     return;
   }
 
-  if (!file.type.startsWith("audio/")) {
-    formMessage.textContent = "File bạn chọn không phải file âm thanh.";
+  const allowedExtensions = [
+    "mp3", "wav", "ogg", "oga",
+    "m4a", "aac", "flac", "alac",
+    "opus", "mp4"
+  ];
+
+  const extension = file.name.split(".").pop().toLowerCase();
+
+  if (!allowedExtensions.includes(extension)) {
+    formMessage.textContent = "Định dạng file không được hỗ trợ.";
     return;
   }
 
