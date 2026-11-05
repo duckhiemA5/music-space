@@ -190,6 +190,7 @@ function switchView(viewName) {
   const titles = {
     home: "Khám phá âm nhạc",
     library: "Thư viện nhạc",
+    discover: "Khám phá nhạc mới",
     upload: "Thêm nhạc"
   };
 
@@ -490,9 +491,11 @@ async function playTrack(index) {
   nowTitle.textContent = track.title || "Không có tên";
   nowArtist.textContent = track.artist || "Không rõ nghệ sĩ";
 
+  const playableUrl = track.playback_url || track.audio_url;
+
   const source = track.source_type === "file"
     ? { type: "direct", url: track.audio_url }
-    : identifySource(track.audio_url);
+    : identifySource(playableUrl);
 
   if (source.type === "direct") {
     currentMode = "audio";
@@ -525,7 +528,7 @@ async function playTrack(index) {
 
   } else {
     alert(
-      "Nguồn nhạc này chưa hỗ trợ phát trực tiếp. Hãy dùng link file âm thanh hoặc link từ YouTube, SoundCloud, Spotify."
+      "Bài hát này chưa có nguồn phát. Hãy thêm link YouTube, SoundCloud hoặc Spotify cho bài hát."
     );
   }
 
@@ -1113,6 +1116,290 @@ document.addEventListener("click", async event => {
         button.textContent = "🗑";
     }
 });
+
+// ==========================================
+// MUSIC DISCOVERY - DUYỆT NHẠC MỚI
+// ==========================================
+
+const discoverTracks = document.getElementById("discoverTracks");
+const discoverMessage = document.getElementById("discoverMessage");
+const pendingCount = document.getElementById("pendingCount");
+const refreshDiscover = document.getElementById("refreshDiscover");
+
+let discoveryPassword = "";
+
+function discoveryMessageText(message) {
+  discoverMessage.textContent = message;
+  discoverMessage.hidden = false;
+}
+
+function createDiscoveryHTML(track) {
+  const artwork = track.artwork_url
+    ? `<img src="${escapeHTML(track.artwork_url)}"
+         alt="Ảnh bìa"
+         class="discover-cover"
+         onerror="this.style.display='none'">`
+    : `<div class="discover-cover-placeholder">♫</div>`;
+
+  const releaseDate = track.release_date
+    ? new Date(track.release_date).toLocaleDateString("vi-VN")
+    : "Chưa rõ";
+
+  return `
+    <article class="discover-card">
+      ${artwork}
+
+      <div class="discover-info">
+        <h3>${escapeHTML(track.title || "Không có tên")}</h3>
+
+        <p>${escapeHTML(track.artist || "Không rõ nghệ sĩ")}</p>
+
+        <div class="discover-meta">
+          <span>🌍 ${escapeHTML(track.country_code || "N/A")}</span>
+          <span>📅 ${escapeHTML(releaseDate)}</span>
+        </div>
+
+        <a href="${escapeHTML(track.track_url || "#")}"
+           target="_blank"
+           rel="noopener noreferrer">
+          Nghe thử trên Apple Music ↗
+        </a>
+      </div>
+
+      <div class="discover-actions">
+        <button
+          class="approve-btn"
+          data-review-action="approve"
+          data-review-id="${escapeHTML(track.id)}">
+          ✓ Chấp nhận
+        </button>
+
+        <button
+          class="reject-btn"
+          data-review-action="reject"
+          data-review-id="${escapeHTML(track.id)}">
+          ✕ Từ chối
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+// Gọi Edge Function
+async function callReviewFunction(body) {
+  const { data, error } = await supabaseClient.functions.invoke(
+    "review-discovery",
+    {
+      body,
+      headers: {
+        "x-admin-password": discoveryPassword
+      }
+    }
+  );
+
+  if (error) {
+    let detail = error.message;
+
+    if (error.context instanceof Response) {
+      try {
+        const result = await error.context.clone().json();
+        detail = result.error || result.detail || detail;
+      } catch {
+        detail = await error.context.clone().text();
+      }
+    }
+
+    throw new Error(detail);
+  }
+
+  if (!data || !data.success) {
+    throw new Error(data?.error || "Không thể xử lý yêu cầu.");
+  }
+
+  return data;
+}
+
+// Tải danh sách bài hát chờ duyệt
+async function loadDiscoveries() {
+  if (!discoverTracks) return;
+
+  discoverTracks.innerHTML = "";
+  discoveryMessageText("Đang tải danh sách nhạc mới...");
+
+  if (!discoveryPassword) {
+    discoveryPassword = prompt(
+      "Nhập mật khẩu quản trị để xem danh sách nhạc mới:"
+    );
+
+    if (!discoveryPassword) {
+      discoveryPassword = "";
+      discoveryMessageText("Bạn chưa nhập mật khẩu quản trị.");
+      return;
+    }
+  }
+
+  if (refreshDiscover) {
+    refreshDiscover.disabled = true;
+  }
+
+  try {
+    const result = await callReviewFunction({
+      action: "list"
+    });
+
+    const items = result.tracks || [];
+
+    pendingCount.textContent = items.length;
+
+    if (items.length === 0) {
+      discoveryMessageText("Hiện chưa có bài hát nào đang chờ duyệt.");
+      return;
+    }
+
+    discoverTracks.innerHTML = items
+      .map(createDiscoveryHTML)
+      .join("");
+
+    discoverMessage.hidden = true;
+
+  } catch (error) {
+    console.error("Discovery error:", error);
+
+    discoveryPassword = "";
+
+    discoveryMessageText(
+      "Không tải được danh sách: " + error.message
+    );
+
+  } finally {
+    if (refreshDiscover) {
+      refreshDiscover.disabled = false;
+    }
+  }
+}
+
+// ==========================================
+// CHẤP NHẬN / TỪ CHỐI BÀI HÁT
+// TÌM LINK YOUTUBE MIỄN PHÍ
+// ==========================================
+
+document.addEventListener("click", async event => {
+  const button = event.target.closest("[data-review-action]");
+  if (!button) return;
+
+  const action = button.dataset.reviewAction;
+  const id = button.dataset.reviewId;
+
+  if (!id || !["approve", "reject"].includes(action)) return;
+
+  const card = button.closest(".discover-card");
+  const title = card?.querySelector("h3")?.textContent || "";
+  const artist = card?.querySelector(".discover-info p")?.textContent || "";
+
+  let playbackUrl = null;
+
+  if (action === "reject") {
+    if (!confirm(`Bạn có chắc muốn từ chối "${title}"?`)) return;
+  }
+
+  if (action === "approve") {
+    if (!confirm(`Tìm nguồn phát YouTube cho "${title}"?`)) return;
+
+    const searchQuery = encodeURIComponent(`${title} ${artist}`);
+    window.open(
+      `https://www.youtube.com/results?search_query=${searchQuery}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+
+    playbackUrl = prompt(
+      `Đã mở YouTube để tìm bài "${title}".\n\n` +
+      `1. Chọn video đúng bài hát.\n` +
+      `2. Sao chép đường link video.\n` +
+      `3. Dán link vào đây.\n\n` +
+      `Lưu ý: Có thể để trống nếu chưa tìm được nguồn phát.`
+    );
+
+    if (playbackUrl === null) return;
+
+    playbackUrl = playbackUrl.trim();
+
+    if (playbackUrl) {
+      const source = identifySource(playbackUrl);
+
+      if (source.type !== "youtube") {
+        alert("Link không hợp lệ. Vui lòng dán link video YouTube.");
+        return;
+      }
+    } else {
+      playbackUrl = null;
+    }
+  }
+
+  const buttons = card.querySelectorAll("button");
+  buttons.forEach(item => item.disabled = true);
+  button.textContent = "Đang xử lý...";
+
+  try {
+    await callReviewFunction({
+      action,
+      id,
+      playback_url: playbackUrl
+    });
+
+    card.remove();
+
+    const remaining =
+      discoverTracks.querySelectorAll(".discover-card").length;
+
+    pendingCount.textContent = remaining;
+
+    if (remaining === 0) {
+      discoveryMessageText(
+        "Bạn đã xử lý hết danh sách nhạc chờ duyệt."
+      );
+    }
+
+    if (action === "approve") {
+      alert(
+        playbackUrl
+          ? "Đã thêm bài hát và lưu nguồn phát YouTube!"
+          : "Đã thêm bài hát. Bạn có thể bổ sung nguồn phát sau."
+      );
+
+      await loadTracks();
+    } else {
+      alert("Đã từ chối bài hát.");
+    }
+
+  } catch (error) {
+    console.error("Review error:", error);
+
+    alert("Không thể xử lý: " + error.message);
+
+    buttons.forEach(item => item.disabled = false);
+
+    button.textContent =
+      action === "approve" ? "✓ Chấp nhận" : "✕ Từ chối";
+  }
+});
+
+// Nút làm mới
+if (refreshDiscover) {
+  refreshDiscover.addEventListener("click", loadDiscoveries);
+}
+
+// Tự tải khi mở mục Khám phá
+const originalSwitchView = switchView;
+
+switchView = function(viewName) {
+  originalSwitchView(viewName);
+
+  if (viewName === "discover") {
+    loadDiscoveries();
+  }
+};
+
 
 
 init();

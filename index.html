@@ -18,6 +18,7 @@
       <p class="side-label">MENU</p>
       <button class="nav-item active" data-view="home">⌂ <span>Trang chủ</span></button>
       <button class="nav-item" data-view="library">▤ <span>Thư viện</span></button>
+      <button class="nav-item" data-view="discover">✦ <span>Khám phá nhạc mới</span></button>
       <button class="nav-item" data-view="upload">＋ <span>Thêm nhạc</span></button>
 
       <div class="sidebar-bottom">
@@ -93,6 +94,31 @@
         </div>
         <div id="libraryTracks" class="track-list"></div>
         <p id="emptyLibrary" class="empty-state" hidden>Chưa có bài hát nào. Hãy thêm nhạc vào thư viện nhé!</p>
+      </section>
+
+      <section class="view" id="discoverView" hidden>
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">MUSIC DISCOVERY BOT</span>
+            <h2>Nhạc mới được phát hiện</h2>
+            <p>Những bài hát đang chờ bạn phê duyệt.</p>
+          </div>
+
+          <button class="primary-btn" id="refreshDiscover">
+            ↻ Làm mới
+          </button>
+        </div>
+
+        <div class="discover-summary">
+          <span>Đang chờ duyệt: </span>
+          <strong id="pendingCount">0</strong>
+        </div>
+
+        <div id="discoverTracks" class="track-list"></div>
+
+        <p id="discoverMessage" class="empty-state">
+          Đang tải danh sách nhạc mới...
+        </p>
       </section>
 
       <section class="view" id="uploadView" hidden>
